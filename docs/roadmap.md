@@ -1,6 +1,6 @@
 # VS Server — 로드맵
 
-최종 업데이트: 2026-03-28
+최종 업데이트: 2026-03-29
 
 ---
 
@@ -51,15 +51,20 @@ VS Server (FastAPI + Ollama, 단일 포트 8000)
 
 ### 서버 (vs_server.py)
 
-- [ ] VARCO 관련 코드 전부 제거
-- [ ] Qwen2.5-VL-3B (Transformers 경로) 제거
-- [ ] Ollama 프록시 엔드포인트 추가
+- [x] VARCO 관련 코드 전부 제거 (v0.5.1)
+- [x] Qwen2.5-VL-3B (Transformers 경로) 제거 (v0.5.1)
+- [x] Ollama 프록시 엔드포인트 추가 (v0.6)
   - `/transcript/polish` — 녹취록 다듬기 (model 파라미터로 gemma3:12b / qwen3.5:9b 선택)
   - `/ocr/ollama` — VLM OCR (model 파라미터로 qwen3-vl:8b / deepseek-ocr 선택)
 - [ ] StaticFiles로 `ui/` 서빙
 - [ ] 접근 제어 미들웨어: 요청 Host IP로 Tailscale/내부망 구분
-- [ ] health 엔드포인트 업데이트 (Ollama 모델 상태 포함)
-- [ ] Whisper, PaddleOCR 엔드포인트 유지 (변경 없음)
+- [x] health 엔드포인트 업데이트 (Ollama 모델 상태 포함) (v0.6)
+- [x] Whisper, PaddleOCR 엔드포인트 유지 (변경 없음)
+
+### 알려진 이슈
+
+- [ ] Ollama 첫 요청 빈 응답 문제: 서버 재시작 후 `/ocr/ollama` 첫 요청 시 모델 로딩(~240초) 중 빈 문자열 반환. 두 번째 요청부터 정상. 원인 미확정 — 재시도 로직 또는 사전 워밍업으로 해결 검토
+- [ ] PaddleOCR cuDNN 8 의존성: conda 환경에 cuDNN 8 수동 설치 필요. `libcusparse`/`libnvJitLink` 충돌 시 conda 환경 것을 제거하고 시스템 CUDA 사용. `start.sh`에 `LD_LIBRARY_PATH` 설정 필수
 
 ### 클라이언트 (ui/)
 
@@ -73,7 +78,7 @@ VS Server (FastAPI + Ollama, 단일 포트 8000)
 
 - [ ] CLAUDE.md 업데이트 (v0.6 반영)
 - [ ] whisper_server.py 삭제 (레거시)
-- [ ] start.sh 업데이트
+- [x] start.sh 업데이트 (LD_LIBRARY_PATH 추가)
 
 ---
 
@@ -126,27 +131,55 @@ VS Server (FastAPI + Ollama, 단일 포트 8000)
 
 ---
 
-## Phase 3: Jingyeskan 징계 절차 관리 (장기)
+## Phase 3: Jingyeskan — 징계 자료 자동화 (Virtual World)
 
-**목표**: VS Server 위의 웹 앱으로, 징계 절차 전체를 단계별로 관리
+**목표**: VS Server 위의 웹 UI로, 징계 자료의 Virtual World(텍스트 분석) 파이프라인을 제공
 
-### 핵심 기능 (기존 구상 기반)
+### Virtual World / Material World 분리 구조
+
+같은 원본 자료가 두 갈래로 처리됨:
+
+```
+원본 자료 (팩스, 메신저 등으로 수집 → Windows에서 파일 서버에 보관)
+│
+├── Virtual World (VS Server 웹 UI)
+│   ├── 1. 자료 업로드 (PDF/이미지를 브라우저에서)
+│   ├── 2. OCR → 텍스트 추출 (Qwen3-VL / PaddleOCR)
+│   ├── 3. 녹취록 처리 → 전사 + 화자매칭 + 다듬기
+│   └── 4. 텍스트 파일 세트 다운로드
+│       └── → Windows에서 claudemain으로 쟁점 추출/요약 (Claude API)
+│
+└── Material World (Windows 로컬)
+    └── 원본 이미지를 한글(HWPX) 문서로 변환 (Jingyeskan-1.0)
+```
+
+### 웹 UI 구현 (다음 세션 우선)
+
+- [ ] 사건별 자료 업로드 페이지 (collector 폴더 구조에 맞춘 6종 분류)
+- [ ] 업로드된 자료의 OCR 일괄 처리 (모델 선택 가능)
+- [ ] 녹취록 업로드 → 전사 + 화자매칭 + 다듬기
+- [ ] 처리 결과 텍스트를 사건별로 묶어 다운로드 (claudemain 입력 형식)
+- [ ] 처리 상태 표시 (진행 중/완료/오류)
+
+### claudemain 연동 (Windows CLI)
+
+- [ ] VS Server에서 다운로드한 텍스트를 claudemain의 workspace/{case_id}/ 에 배치
+- [ ] claudemain 3단계(쟁점 추출) + 4단계(통합 문서) + 5단계(요약) 실행
+- [ ] OCR 엔진을 Tesseract → VS Server API 호출로 교체 검토
+
+### 장기 확장
 
 - [ ] 사건 접수 및 관리 (징계 사유, 관련자, 상태 추적)
-- [ ] 단계별 공고문 확인 및 보관
-- [ ] 업체별 조합원 데이터 관리
 - [ ] 통지서 자동 생성 (3일 전 통지 규정 준수 확인)
 - [ ] 투표 관리
-- [ ] 녹취록 파이프라인 통합
-  - 음성 → Whisper 전사 → Clova Note 화자매칭 → LLM 다듬기 → Claude 요약
 - [ ] 징계위원회 의결 기록 관리
 
-### 기술 스택 (예정)
+### 기술 스택
 
-- 프론트엔드: HTML/JS (기존 VS 브랜딩 다크 테마)
+- 프론트엔드: HTML/JS (VS 브랜딩 다크 테마)
 - 백엔드: VS Server FastAPI
-- 데이터: 파일 기반 또는 SQLite (규모에 따라 결정)
-- 외부 API: Claude Sonnet (요약/논점 추출)
+- 데이터: 파일 기반 또는 SQLite
+- 외부 API: Claude API는 Windows에서 호출 (API 키 로컬 보관)
 
 ---
 
@@ -202,11 +235,10 @@ Qwen3.5는 Gated DeltaNet + MoE 구조로 CPU 오프로딩이 매우 효율적. 
 
 ## 예정 작업 (우선순위 순)
 
-1. vs_server.py v0.6 작성 (Phase 1 서버)
-2. ui/ 폴더 통합 + StaticFiles 서빙 (Phase 1 클라이언트)
-3. Qwen3.5 35B 테스트 검토: RAM 확인 → 업그레이드 → 녹취록 품질 비교 (Phase 1.5)
-4. 영수증 정리 OCR 엔진 교체 및 테스트 (Phase 2)
-5. 문서 이미지 전처리 서비스 구현 (Phase 2)
+1. **Jingyeskan 웹 UI 프로토타입** — 사건별 자료 업로드 → OCR/전사 → 텍스트 다운로드 (Phase 3)
+2. 기존 HTML 클라이언트 통합 — StaticFiles 서빙 + 엔드포인트 교체 (Phase 1 잔여)
+3. 접근 제어 미들웨어 (Phase 1 잔여)
+4. Qwen3.5 35B 테스트 검토 (Phase 1.5)
+5. 영수증 정리 완성도 향상 (Phase 2)
 6. systemd 서비스 등록
-7. 영수증 사용자 가이드 작성
-8. Jingyeskan 설계 및 프로토타입 (Phase 3)
+7. claudemain OCR 엔진을 VS Server API로 교체
